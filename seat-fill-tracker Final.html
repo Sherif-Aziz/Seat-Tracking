@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Seat Fill Tracker</title>
+<style>
+  :root{
+    --bg:#0b0e11; --panel:#12161d; --panel2:#171c25; --border:#232938;
+    --text:#e6e8eb; --muted:#8a93a6; --accent:#f5a623;
+    --open:#2dd4bf; --open-bg:rgba(45,212,191,0.12);
+    --closed:#f43f5e; --closed-bg:rgba(244,63,94,0.16);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;}
+  #app{max-width:720px;margin:0 auto;padding:14px 14px 80px;min-height:100vh;}
+  .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  h1{font-size:18px;margin:2px 0 14px;font-weight:700;}
+  .meter-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px;}
+  .meter-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+  .meter-count{font-size:26px;font-weight:700;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .meter-count .of{color:var(--muted);font-size:14px;font-weight:500;}
+  .meter-track{height:10px;background:var(--panel2);border-radius:6px;overflow:hidden;border:1px solid var(--border);}
+  .meter-fill{height:100%;background:linear-gradient(90deg,var(--closed),#ff7a8a);transition:width .35s ease;}
+  .meter-labels{display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--muted);}
+  .toolbar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center;}
+  .name-input{flex:1;min-width:140px;background:var(--panel);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:14px;}
+  .name-input::placeholder{color:var(--muted);}
+  .chip{background:var(--panel);border:1px solid var(--border);color:var(--muted);padding:8px 12px;border-radius:8px;font-size:13px;cursor:pointer;user-select:none;white-space:nowrap;}
+  .chip.active{color:var(--bg);background:var(--accent);border-color:var(--accent);font-weight:600;}
+  .chip.danger{color:var(--closed);}
+  .sync{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px;margin-bottom:10px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--open);flex-shrink:0;}
+  .dot.bad{background:var(--closed);}
+  .row-block{margin-bottom:16px;}
+  .row-label{font-size:12px;color:var(--muted);font-weight:700;margin-bottom:6px;letter-spacing:.05em;}
+  .seats{display:flex;flex-wrap:wrap;gap:6px;}
+  .seat{width:42px;height:42px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--open-bg);color:var(--open);touch-action:manipulation;transition:transform .08s ease;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  .seat:active{transform:scale(.9);}
+  .seat.closed{background:var(--closed-bg);color:var(--closed);border-color:rgba(244,63,94,.3);}
+  .setup-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:14px;}
+  .setup-card p{color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 16px;}
+  .row-form{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+  .row-form input{background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:8px;font-size:14px;}
+  .row-form input.label{width:70px;}
+  .row-form input.num{width:90px;}
+  .btn{background:var(--accent);color:#1a1305;border:none;padding:10px 16px;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--border);}
+  .pending-rows{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;}
+  .pending-chip{background:var(--panel2);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:13px;display:flex;gap:8px;align-items:center;}
+  .pending-chip button{background:none;border:none;color:var(--closed);cursor:pointer;font-size:14px;line-height:1;}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--border);color:var(--text);padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90%;text-align:center;z-index:50;}
+  .toast.show{opacity:1;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;max-width:320px;}
+  .modal p{color:var(--text);font-size:14px;margin:0 0 16px;}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end;}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-bottom:14px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const NAME_KEY = 'seatTrackerName';
+const URL_KEY = 'seatTrackerApiUrl';
+let apiUrl = localStorage.getItem(URL_KEY) || '';
+let staffName = localStorage.getItem(NAME_KEY) || '';
+let state = null;
+let lastStateStr = '';
+let pendingRows = [];
+let showOpenOnly = false;
+let lastSyncOk = true;
+let polling = false;
+let pollStarted = false;
+
+const app = document.getElementById('app');
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>t.classList.remove('show'), 2400);
+}
+function updateSyncIndicator(){
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  if(dot) dot.className = 'dot' + (lastSyncOk ? '' : ' bad');
+  if(txt) txt.textContent = lastSyncOk ? 'synced' : 'sync issue — retrying';
+}
+
+async function apiGet(){
+  const res = await fetch(apiUrl, {method:'GET'});
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'Server error');
+  return data;
+}
+async function apiPost(payload){
+  const res = await fetch(apiUrl, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(payload)});
+  const data = await res.json();
+  if(!data.ok) throw new Error(data.error || 'Server error');
+  return data;
+}
+function saveName(v){ staffName=v; localStorage.setItem(NAME_KEY, v); }
+function saveUrl(v){ apiUrl=v; localStorage.setItem(URL_KEY, v); }
+
+function totalSeats(){ return state ? state.rows.reduce((s,r)=>s+r.count,0) : 0; }
+function closedCount(){ return state ? Object.keys(state.seats||{}).length : 0; }
+
+function render(){
+  if(!apiUrl){ renderConnect(false); return; }
+  if(state===null){ renderConnect(true); return; }
+  if(state.rows.length===0){ renderSetup(); return; }
+  renderGrid();
+}
+
+function renderConnect(failed){
+  app.innerHTML = `
+    <div class="eyebrow">Ground Ops</div>
+    <h1>Connect this phone</h1>
+    <div class="setup-card">
+      <p>${failed ? "Could not reach the tracker. Check the link and try again." : "Paste the tracker link your manager sent you. You only need to do this once on this phone."}</p>
+      <div class="row-form">
+        <input id="urlInput" placeholder="https://script.google.com/..." style="flex:1;min-width:200px;" value="${apiUrl.replace(/"/g,'&quot;')}">
+        <button class="btn" id="connectBtn">Connect</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('connectBtn').onclick = async ()=>{
+    const v = document.getElementById('urlInput').value.trim();
+    if(!v){ toast('Paste the link first'); return; }
+    saveUrl(v);
+    toast('Connecting…');
+    await boot();
+  };
+}
+
+function renderPending(listId, btnId){
+  const el = document.getElementById(listId);
+  el.innerHTML = pendingRows.map((r,i)=>`
+    <div class="pending-chip">Row ${r.label}: ${r.count} seats (from ${r.start})
+      <button data-i="${i}">×</button>
+    </div>`).join('');
+  el.querySelectorAll('button').forEach(b=>{
+    b.onclick = ()=>{ pendingRows.splice(+b.dataset.i,1); renderPending(listId,btnId); };
+  });
+  const btn = document.getElementById(btnId);
+  if(btn) btn.disabled = pendingRows.length===0;
+}
+
+function renderSetup(){
+  app.innerHTML = `
+    <div class="eyebrow">Ground Ops</div>
+    <h1>Set up the upgrade section</h1>
+    <div class="setup-card">
+      <p>Add each row in the category you're filling tonight. You can add more rows later.</p>
+      <div class="row-form">
+        <input class="label" id="rl" placeholder="Row (A)" maxlength="6">
+        <input class="num" id="rs" type="number" placeholder="Starts at" value="1" min="1">
+        <input class="num" id="rc" type="number" placeholder="Seats" min="1">
+        <button class="btn secondary" id="addRowBtn">Add</button>
+      </div>
+      <div class="pending-rows" id="pendingRows"></div>
+      <button class="btn" id="startBtn" disabled>Start tracking</button>
+    </div>
+  `;
+  renderPending('pendingRows','startBtn');
+  document.getElementById('addRowBtn').onclick = ()=>{
+    const label = document.getElementById('rl').value.trim();
+    const start = parseInt(document.getElementById('rs').value)||1;
+    const count = parseInt(document.getElementById('rc').value);
+    if(!label || !count || count<1){ toast('Enter a row label and seat count'); return; }
+    pendingRows.push({label, start, count});
+    document.getElementById('rl').value=''; document.getElementById('rc').value='';
+    renderPending('pendingRows','startBtn');
+  };
+  document.getElementById('startBtn').onclick = async ()=>{
+    if(pendingRows.length===0) return;
+    try{
+      const data = await apiPost({action:'addRows', rows:pendingRows});
+      state = {rows:data.rows, seats:data.seats};
+      lastStateStr = JSON.stringify(state);
+      pendingRows = [];
+      render();
+    }catch(e){ toast('Could not save — try again'); }
+  };
+}
+
+function renderGrid(){
+  const total = totalSeats(), closed = closedCount(), open = total-closed;
+  const pct = total ? Math.round(closed/total*100) : 0;
+
+  app.innerHTML = `
+    <div class="eyebrow">Ground Ops — Live</div>
+    <h1>Upgrade Section Tracker</h1>
+    <div class="sync"><span class="dot" id="syncDot"></span><span id="syncText">synced</span></div>
+
+    <div class="meter-wrap">
+      <div class="meter-row">
+        <div class="meter-count">${closed}<span class="of"> / ${total} filled</span></div>
+        <div class="meter-count" style="color:var(--open)">${open}<span class="of" style="color:var(--muted)"> open</span></div>
+      </div>
+      <div class="meter-track"><div class="meter-fill" style="width:${pct}%"></div></div>
+      <div class="meter-labels"><span>0%</span><span>${pct}% filled</span><span>100%</span></div>
+    </div>
+
+    <div class="toolbar">
+      <input class="name-input" id="nameInput" placeholder="Your name (required to mark seats)" value="${staffName.replace(/"/g,'&quot;')}">
+    </div>
+    <div class="toolbar">
+      <div class="chip ${showOpenOnly?'active':''}" id="filterChip">Show open only</div>
+      <div class="chip" id="editLayoutChip">+ Add rows</div>
+      <div class="chip danger" id="resetChip">Reset all</div>
+      <div class="chip" id="changeLinkChip">Change link</div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:var(--open)"></i>Open</span>
+      <span><i style="background:var(--closed)"></i>Filled</span>
+    </div>
+
+    <div id="rows"></div>
+  `;
+
+  document.getElementById('nameInput').oninput = (e)=> saveName(e.target.value);
+  document.getElementById('filterChip').onclick = ()=>{ showOpenOnly=!showOpenOnly; renderGrid(); };
+  document.getElementById('editLayoutChip').onclick = renderEditLayout;
+  document.getElementById('resetChip').onclick = confirmReset;
+  document.getElementById('changeLinkChip').onclick = ()=>{ localStorage.removeItem(URL_KEY); apiUrl=''; state=null; render(); };
+  updateSyncIndicator();
+
+  const rowsEl = document.getElementById('rows');
+  rowsEl.innerHTML = state.rows.map(r=>{
+    const seatsHtml = [];
+    for(let n=r.start; n<r.start+r.count; n++){
+      const id = `${r.label}-${n}`;
+      const isClosed = !!(state.seats && state.seats[id]);
+      if(showOpenOnly && isClosed) continue;
+      seatsHtml.push(`<div class="seat ${isClosed?'closed':''}" data-row="${r.label}" data-n="${n}">${n}</div>`);
+    }
+    if(showOpenOnly && seatsHtml.length===0) return '';
+    return `<div class="row-block"><div class="row-label">ROW ${r.label}</div><div class="seats">${seatsHtml.join('')}</div></div>`;
+  }).join('');
+
+  rowsEl.querySelectorAll('.seat').forEach(el=>{
+    el.onclick = ()=> toggleSeat(el.dataset.row, +el.dataset.n);
+  });
+}
+
+function renderEditLayout(){
+  pendingRows = [];
+  app.innerHTML = `
+    <div class="eyebrow">Ground Ops</div>
+    <h1>Add more rows</h1>
+    <div class="setup-card">
+      <div class="row-form">
+        <input class="label" id="rl" placeholder="Row (A)" maxlength="6">
+        <input class="num" id="rs" type="number" placeholder="Starts at" value="1" min="1">
+        <input class="num" id="rc" type="number" placeholder="Seats" min="1">
+        <button class="btn secondary" id="addRowBtn">Add</button>
+      </div>
+      <div class="pending-rows" id="pendingRows2"></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn" id="saveAddBtn" disabled>Save rows</button>
+        <button class="btn secondary" id="cancelAddBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  renderPending('pendingRows2','saveAddBtn');
+  document.getElementById('addRowBtn').onclick = ()=>{
+    const label = document.getElementById('rl').value.trim();
+    const start = parseInt(document.getElementById('rs').value)||1;
+    const count = parseInt(document.getElementById('rc').value);
+    if(!label || !count || count<1){ toast('Enter a row label and seat count'); return; }
+    pendingRows.push({label, start, count});
+    document.getElementById('rl').value=''; document.getElementById('rc').value='';
+    renderPending('pendingRows2','saveAddBtn');
+  };
+  document.getElementById('cancelAddBtn').onclick = renderGrid;
+  document.getElementById('saveAddBtn').onclick = async ()=>{
+    try{
+      const data = await apiPost({action:'addRows', rows:pendingRows});
+      state = {rows:data.rows, seats:data.seats};
+      lastStateStr = JSON.stringify(state);
+      pendingRows = [];
+      renderGrid();
+      toast('Rows added');
+    }catch(e){ toast('Could not save — try again'); }
+  };
+}
+
+function confirmReset(){
+  const overlay = document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.innerHTML = `<div class="modal">
+    <p>Reset all seats to open? This clears tonight's progress for everyone. This can't be undone.</p>
+    <div class="row">
+      <button class="btn secondary" id="cancelReset">Cancel</button>
+      <button class="btn" style="background:var(--closed)" id="confirmReset">Reset</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#cancelReset').onclick = ()=>overlay.remove();
+  overlay.querySelector('#confirmReset').onclick = async ()=>{
+    try{
+      const data = await apiPost({action:'reset'});
+      state = {rows:data.rows, seats:data.seats};
+      lastStateStr = JSON.stringify(state);
+      renderGrid();
+      toast('All seats reset');
+    }catch(e){ toast('Could not reset — try again'); }
+    overlay.remove();
+  };
+}
+
+async function toggleSeat(row, n){
+  if(!staffName || !staffName.trim()){
+    toast('Enter your name first');
+    document.getElementById('nameInput')?.focus();
+    return;
+  }
+  const id = `${row}-${n}`;
+  const wasClosed = !!(state.seats && state.seats[id]);
+
+  state.seats = state.seats || {};
+  if(wasClosed){ delete state.seats[id]; } else { state.seats[id] = {by:staffName, ts:Date.now()}; }
+  renderGrid();
+
+  try{
+    const data = await apiPost({action: wasClosed ? 'open' : 'close', seatId:id, by:staffName});
+    state = {rows:data.rows, seats:data.seats};
+    lastStateStr = JSON.stringify(state);
+    lastSyncOk = true;
+    renderGrid();
+  }catch(e){
+    lastSyncOk = false;
+    toast('Could not reach server — will retry');
+    updateSyncIndicator();
+  }
+}
+
+async function poll(){
+  if(polling || !apiUrl || state===null) return;
+  polling = true;
+  try{
+    const data = await apiGet();
+    const fresh = {rows:data.rows, seats:data.seats};
+    const freshStr = JSON.stringify(fresh);
+    if(freshStr !== lastStateStr){ state = fresh; lastStateStr = freshStr; renderGrid(); }
+    lastSyncOk = true;
+  }catch(e){ lastSyncOk = false; }
+  updateSyncIndicator();
+  polling = false;
+}
+
+async function boot(){
+  if(!apiUrl){ render(); return; }
+  try{
+    const data = await apiGet();
+    state = {rows:data.rows, seats:data.seats};
+    lastStateStr = JSON.stringify(state);
+    render();
+    if(!pollStarted){ pollStarted = true; setInterval(poll, 5000); }
+  }catch(e){
+    state = null;
+    render();
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
